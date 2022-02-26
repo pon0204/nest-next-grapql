@@ -3,12 +3,66 @@ import { ConfigService } from '@nestjs/config';
 import { GqlModuleOptions } from '@nestjs/graphql';
 import * as path from 'path';
 
+import { LoggingWinston } from '@google-cloud/logging-winston';
+import {
+  utilities as nestWinstonModuleUtilities,
+  WinstonModuleOptions,
+} from 'nest-winston';
+import winston from 'winston';
+import { PrismaClientOptions } from '@prisma/client/runtime';
+
 /**
  * アプリケーションモジュールで利用する設定値は、ここから取得します。
  */
 @Injectable()
 export class PbEnv {
   constructor(private configService: ConfigService) {}
+
+  get WinstonModuleOptionsFactory(): WinstonModuleOptions {
+    const loggingConsole = new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.ms(),
+        winston.format.errors({ stack: true }),
+        nestWinstonModuleUtilities.format.nestLike('PB_BACKEND', {
+          prettyPrint: true,
+        }),
+      ),
+    });
+    const loggingCloudLogging = new LoggingWinston({
+      serviceContext: {
+        service: 'pb-backend',
+        version: '1.0.0',
+      },
+    });
+    return {
+      level: this.isProduction() ? 'info' : 'debug',
+      transports: this.isProduction()
+        ? [loggingConsole, loggingCloudLogging]
+        : [loggingConsole],
+    };
+  }
+
+  get PrismaOptionsFactory(): PrismaClientOptions {
+    const logOptions = {
+      development: [
+        { emit: 'event', level: 'query' },
+        { emit: 'event', level: 'info' },
+        { emit: 'event', level: 'warn' },
+      ],
+      production: [{ emit: 'event', level: 'warn' }],
+      test: [
+        { emit: 'event', level: 'info' },
+        { emit: 'event', level: 'warn' },
+      ],
+    };
+    console.log(this.NodeEnv);
+    return {
+      errorFormat: 'colorless',
+      rejectOnNotFound: true,
+      log: logOptions[this.NodeEnv],
+    };
+  }
 
   isProduction(): boolean {
     return this.configService.get('NODE_ENV') === 'production';
