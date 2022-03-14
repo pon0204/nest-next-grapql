@@ -30,3 +30,4 @@ resource "google_artifact_registry_repository" "blog-frontend-training-app" {
   description   = "フロントエンドアプリケーション"
   format        = "DOCKER"
 }
+
